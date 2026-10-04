@@ -24,6 +24,47 @@
       </span>
     </p>
 
+    <!-- 专用通道占用：与要客保障、停机位台账同源，均由要客保障单状态派生，本页只读 -->
+    <section class="channel-panel">
+      <header class="channel-panel-head">
+        <h3>专用通道实时占用（廊桥靠接参考）</h3>
+        <p class="channel-note">
+          与要客保障页、停机位台账读到的是同一份通道占用：保障中/待确认占用，撤回、确认完成即释放；
+          冲突以要客保障单状态仲裁。
+        </p>
+      </header>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>专用通道</th>
+            <th>持占保障单</th>
+            <th>航班号</th>
+            <th>要客等级</th>
+            <th>接待单位</th>
+            <th>引导人员</th>
+            <th>占用来源状态</th>
+            <th>冲突告警</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in channelOccupancies" :key="item.channel" :class="{ 'conflict-row': item.conflict }">
+            <td>{{ item.channel }}</td>
+            <td>{{ item.保障编号 }}</td>
+            <td>{{ item.航班号 }}</td>
+            <td>{{ item.要客等级 }}</td>
+            <td>{{ item.接待单位 }}</td>
+            <td>{{ item.引导人员 }}</td>
+            <td>{{ item.status }}</td>
+            <td v-if="item.conflict" class="error-text">多单同占，已按仲裁规则裁定，请人工核对</td>
+            <td v-else>—</td>
+          </tr>
+          <tr v-if="!channelOccupancies.length">
+            <td colspan="8" class="empty-state">当前无专用通道占用</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
     <form class="filter-bar" @submit.prevent="reload">
       <label v-for="field in filterFields" :key="field" class="filter-item">
         <span>{{ field }}</span>
@@ -75,11 +116,12 @@ import { computed, onMounted, ref } from 'vue'
 
 import {
   downloadEntries,
+  listChannelOccupancies,
   listEntries,
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
-import type { EntryRow } from '@/data/types'
+import type { ChannelOccupancy, EntryRow } from '@/data/types'
 
 const meta = moduleMeta('bridge')
 const columns = ["作业编号", "廊桥编号", "对应机位", "靠桥时间", "撤桥时间", "操作人员", "对接检查项", "作业状态"]
@@ -92,6 +134,8 @@ const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
+// 通道占用读取面与要客保障、停机位同源：只展示派生结果，廊桥侧不另存占用。
+const channelOccupancies = ref<ChannelOccupancy[]>([])
 const statusSummary = computed(() =>
   statuses.map((status: string) => ({
     status,
@@ -128,6 +172,7 @@ function reload() {
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items
     total.value = payload.total
+    channelOccupancies.value = listChannelOccupancies()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '廊桥靠接列表读取失败'
   }

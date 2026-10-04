@@ -35,3 +35,19 @@ body { margin: 0; background: #f6f8fb; color: #1f2937; }
 .error-text { color: #b42318; }
 .status-legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 10px; font-size: 12px; color: var(--muted); }
 .legend-item { background: #eef2f7; border-radius: 999px; padding: 2px 10px; }
+
+/* 专用通道占用面板（要客保障 / 停机位 / 廊桥靠接三处共用，数据同源） */
+.channel-panel { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin: 0 0 14px; }
+.channel-panel-head { margin-bottom: 8px; }
+.channel-panel-head h3 { margin: 0 0 4px; font-size: 14px; }
+.channel-note { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.6; }
+.conflict-row { background: #fef3f2; }
+.channel-tag { display: inline-block; margin-left: 6px; padding: 0 8px; border-radius: 999px; font-size: 11px; line-height: 18px; vertical-align: middle; }
+.ledger-tag { display: inline-block; padding: 0 8px; border-radius: 999px; font-size: 11px; line-height: 18px; }
+.tag-held { background: #fff1e6; color: #b54708; border: 1px solid #fdb022; }
+.tag-released { background: #e7f8ec; color: #157f3b; border: 1px solid #6ce9a6; }
+.tag-idle { background: #eef2f7; color: var(--muted); border: 1px solid var(--border); }
+.tag-danger { background: #fee4e2; color: #b42318; border: 1px solid #fda29b; }
+.muted-text { color: var(--muted); font-size: 13px; }
+.success-text { color: #157f3b; }
+.link:disabled { color: #94a3b8; cursor: wait; }

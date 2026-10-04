@@ -24,6 +24,88 @@
       </span>
     </p>
 
+    <!-- 专用通道占用：与要客保障、廊桥靠接同源，由要客保障单状态派生，本页只读不写 -->
+    <section class="channel-panel">
+      <header class="channel-panel-head">
+        <h3>专用通道实时占用</h3>
+        <p class="channel-note">
+          占用情况派生自要客保障单状态（保障中/待确认占用，撤回、确认完成释放），本台账不单独判定占用；
+          与廊桥靠接页读到的是同一份结果。冲突一律以保障单状态仲裁。
+        </p>
+      </header>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>专用通道</th>
+            <th>持占保障单</th>
+            <th>航班号</th>
+            <th>要客等级</th>
+            <th>接待单位</th>
+            <th>引导人员</th>
+            <th>占用来源状态</th>
+            <th>冲突告警</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in channelOccupancies" :key="item.channel" :class="{ 'conflict-row': item.conflict }">
+            <td>{{ item.channel }}</td>
+            <td>{{ item.保障编号 }}</td>
+            <td>{{ item.航班号 }}</td>
+            <td>{{ item.要客等级 }}</td>
+            <td>{{ item.接待单位 }}</td>
+            <td>{{ item.引导人员 }}</td>
+            <td>{{ item.status }}</td>
+            <td v-if="item.conflict" class="error-text">多单同占，已按仲裁规则裁定，请人工核对</td>
+            <td v-else>—</td>
+          </tr>
+          <tr v-if="!channelOccupancies.length">
+            <td colspan="8" class="empty-state">当前无专用通道占用</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 专用通道占用台账：占用/释放流水，要客保障的释放结果落到这里 -->
+    <section class="channel-panel">
+      <header class="channel-panel-head">
+        <h3>专用通道占用台账</h3>
+        <p class="channel-note">每次分配占用、撤回释放、确认完成释放各落一条；最新记录在前。</p>
+      </header>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>时间</th>
+            <th>专用通道</th>
+            <th>动作</th>
+            <th>保障编号</th>
+            <th>航班号</th>
+            <th>要客等级</th>
+            <th>接待单位</th>
+            <th>引导人员</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="entry in ledgerRows" :key="entry.id">
+            <td>{{ entry.time }}</td>
+            <td>{{ entry.channel }}</td>
+            <td>
+              <span class="ledger-tag" :class="entry.action === '占用' ? 'tag-held' : 'tag-released'">{{ entry.action }}</span>
+            </td>
+            <td>{{ entry.保障编号 }}</td>
+            <td>{{ entry.航班号 }}</td>
+            <td>{{ entry.要客等级 }}</td>
+            <td>{{ entry.接待单位 }}</td>
+            <td>{{ entry.引导人员 }}</td>
+            <td>{{ entry.note }}</td>
+          </tr>
+          <tr v-if="!ledgerRows.length">
+            <td colspan="9" class="empty-state">暂无专用通道占用台账记录</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
     <form class="filter-bar" @submit.prevent="reload">
       <label v-for="field in filterFields" :key="field" class="filter-item">
         <span>{{ field }}</span>
@@ -75,11 +157,13 @@ import { computed, onMounted, ref } from 'vue'
 
 import {
   downloadEntries,
+  listChannelOccupancies,
+  listChannelOccupancyLedger,
   listEntries,
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
-import type { EntryRow } from '@/data/types'
+import type { ChannelLedgerEntry, ChannelOccupancy, EntryRow } from '@/data/types'
 
 const meta = moduleMeta('stand')
 const columns = ["机位编号", "机位类型", "适用机型", "廊桥配置", "近远机位", "占用时段", "当前航班", "机位状态"]
@@ -92,6 +176,9 @@ const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
+// 专用通道占用与台账：占用为派生结果（只读），台账为落地流水，两处与廊桥靠接同源。
+const channelOccupancies = ref<ChannelOccupancy[]>([])
+const ledgerRows = ref<ChannelLedgerEntry[]>([])
 const statusSummary = computed(() =>
   statuses.map((status: string) => ({
     status,
@@ -128,6 +215,9 @@ function reload() {
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items
     total.value = payload.total
+    // 通道占用读取面与要客保障、廊桥靠接完全同源；台账只做留痕。
+    channelOccupancies.value = listChannelOccupancies()
+    ledgerRows.value = listChannelOccupancyLedger()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '机位分配列表读取失败'
   }
