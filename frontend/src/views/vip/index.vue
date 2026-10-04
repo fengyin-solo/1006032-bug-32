@@ -3,7 +3,7 @@
     <header class="page-head">
       <div>
         <h2>要客保障管理</h2>
-        <p class="page-desc">维护要客保障单，围绕保障编号、航班号、要客等级、接待单位做登记、筛选与状态流转。</p>
+        <p class="page-desc">维护要客保障单，围绕保障编号、航班号、要客等级、接待单位做登记、筛选与状态流转；专用通道占用由保障单状态派生，不另存副本。</p>
       </div>
       <div class="page-actions">
         <button class="btn primary" type="button" @click="openCreate">登记要客保障单</button>
@@ -22,6 +22,12 @@
       <span v-for="item in statusSummary" :key="item.status" class="legend-item">
         {{ item.status }}：{{ item.count }}
       </span>
+    </p>
+
+    <p class="flow-hint">
+      状态只能顺次推进：待准备 → 保障中 → 待确认 → 已完成，不许跳步；持有通道期间可撤回。
+      专用通道占用由保障单状态派生（待准备 / 保障中 / 待确认 = 占用中，已完成 / 已撤回 = 已释放），
+      与停机位占用台账、廊桥靠接页读到的是同一份；冲突时以要客保障单状态为准。
     </p>
 
     <form class="filter-bar" @submit.prevent="reload">
@@ -47,7 +53,7 @@
           <td>{{ row.status }}</td>
           <td class="row-actions">
             <button
-              v-for="action in actions"
+              v-for="action in rowActions(row)"
               :key="action"
               class="link"
               type="button"
@@ -55,6 +61,7 @@
             >
               {{ action }}
             </button>
+            <span v-if="!rowActions(row).length" class="muted-text">已终结</span>
           </td>
         </tr>
         <tr v-if="!rows.length">
@@ -66,6 +73,7 @@
     <footer class="page-foot">
       <span>共 {{ total }} 条要客保障记录</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
+      <span v-else-if="noticeMessage" class="ok-text">{{ noticeMessage }}</span>
     </footer>
   </section>
 </template>
@@ -74,6 +82,7 @@
 import { computed, onMounted, ref } from 'vue'
 
 import {
+  availableActions,
   downloadEntries,
   listEntries,
   moduleMeta,
@@ -82,16 +91,18 @@ import {
 import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('vip')
-const columns = ["保障编号", "航班号", "要客等级", "接待单位", "引导人员", "专用通道", "车辆安排", "保障状态"]
-const actions = ["开始准备", "提交确认", "确认完成"]
-const statuses = ["待准备", "保障中", "待确认", "已完成"]
+// 「通道占用」不是存储字段，是列表读出来时每行挂上的派生列，与台账同源。
+const columns = ["保障编号", "航班号", "要客等级", "接待单位", "引导人员", "专用通道", "车辆安排", "保障状态", "通道占用"]
+const statuses = ["待准备", "保障中", "待确认", "已完成", "已撤回"]
 const stats = [{"label": "今日要客保障", "value": 0}, {"label": "保障中单数", "value": 0}, {"label": "待确认单数", "value": 0}]
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
+const noticeMessage = ref('')
 const filters = ref<Record<string, string>>({})
-const filterFields = columns.slice(0, 3)
+// 要客等级、接待单位、引导人员三处都能查，读到的通道占用是同一份派生结果。
+const filterFields = ["保障编号", "航班号", "要客等级", "接待单位", "引导人员"]
 const statusSummary = computed(() =>
   statuses.map((status: string) => ({
     status,
@@ -99,8 +110,14 @@ const statusSummary = computed(() =>
   })),
 )
 
+function rowActions(row: EntryRow): string[] {
+  return availableActions(meta.key, row)
+}
+
 function resetFilters() {
   filters.value = {}
+  errorMessage.value = ''
+  noticeMessage.value = ''
   reload()
 }
 
@@ -110,16 +127,20 @@ function exportRows() {
 
 function openCreate() {
   errorMessage.value = '要客保障单登记入口尚未接入审批流'
+  noticeMessage.value = ''
 }
 
 function runAction(action: string, row: EntryRow) {
   errorMessage.value = ''
+  noticeMessage.value = ''
   const result = applyAction(meta.key, Number(row.id), action)
   if (!result.ok) {
     errorMessage.value = result.message
     return
   }
   reload()
+  // 确认完成 / 撤回保障的释放结果要让人看见，不能点了没反应。
+  noticeMessage.value = result.message
 }
 
 function reload() {

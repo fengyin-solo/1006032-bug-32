@@ -63,6 +63,29 @@
       </tbody>
     </table>
 
+    <section class="ledger-panel">
+      <h3 class="ledger-title">专用通道占用台账（停机位占用台账）</h3>
+      <p class="ledger-note">
+        台账由要客保障单状态派生：待准备 / 保障中 / 待确认 = 占用中，已完成 / 已撤回 = 空闲；
+        确认完成与撤回保障的释放结果都落在这里。与廊桥靠接页、要客保障页读到的是同一份，冲突时以要客保障单状态为准。
+      </p>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th v-for="column in ledgerColumns" :key="column">{{ column }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="entry in ledger" :key="String(entry.id)">
+            <td v-for="column in ledgerColumns" :key="column">{{ entry[column] ?? '—' }}</td>
+          </tr>
+          <tr v-if="!ledger.length">
+            <td :colspan="ledgerColumns.length" class="empty-state">暂无通道占用记录</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
     <footer class="page-foot">
       <span>共 {{ total }} 条机位分配记录</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
@@ -76,6 +99,7 @@ import { computed, onMounted, ref } from 'vue'
 import {
   downloadEntries,
   listEntries,
+  listStandChannelLedger,
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
@@ -86,8 +110,11 @@ const columns = ["机位编号", "机位类型", "适用机型", "廊桥配置",
 const actions = ["分配机位", "释放机位", "封闭机位"]
 const statuses = ["空闲", "占用中", "维护中", "已封闭"]
 const stats = [{"label": "可用机位", "value": 0}, {"label": "占用中机位", "value": 0}, {"label": "封闭机位", "value": 0}]
+// 停机位占用台账的列：与廊桥靠接页读同一个服务函数，保证同源。
+const ledgerColumns = ["通道", "占用状态", "占用保障单", "最近释放单", "要客等级", "接待单位", "引导人员", "航班号"]
 
 const rows = ref<EntryRow[]>([])
+const ledger = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
@@ -128,6 +155,10 @@ function reload() {
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items
     total.value = payload.total
+    ledger.value = listStandChannelLedger().map((entry) => ({
+      ...entry,
+      占用状态: String(entry.status),
+    }))
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '机位分配列表读取失败'
   }
